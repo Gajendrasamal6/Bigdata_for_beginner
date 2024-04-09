@@ -1,0 +1,824 @@
+What is Spark?
+RDD?
+
+rdd = sc.parallelize([1,2,3,4,5,6,7,8,9])
+
+import pyspark
+from pyspark.sql import SparkSession
+
+spark = SparkSession.appName("My first app").getOrCreate()
+sc = spark.sparkContext
+
+rdd = sc.parallelize([1,2,3,4,5])
+rddData = rdd.collect()
+
+print("No. of Partitions in RDD:", rdd.getNumPartitions())
+print("First element:", rdd.first())
+print(rddData)
+
+
+# Create RDD with 6 partitions.
+rdd = sc.parallelize([1,2,3,4,5], 6)
+
+emptyRDD = sc.parallelize([])
+print("Is RDD empty?:", emptyRDD.isEmpty())
+
+PySpark DataFrames & Pyspark SQL:
+DataSet
+	distributed collection of data.
+	a new interface that has been added from Spark 1.6+
+	it gives more added benefits over RDDs with benefits of SPark SQL's optimized execution engine.
+		strongly typed
+		lambda functions
+	can be constructed from JVM objects, perform transformations on that (map, flatMap, filter etc...)
+	DataSet API is available only for Scala & Java. It is not available for Python!!!
+	
+DataFrames (DF)
+	DF are a kind of DataSet, but organized into named columns.
+	Very similar to tables in a RDBMs.
+	But it has a lot of optimization internally.
+	DFs can be constructed from various sources:
+		data files (structured)
+		Hive tables
+		RDDs (existing)
+		external DBs
+		TXT, CSV, JSON, Avro, Parquet, XML (could be from HDFS, S3, Azure Blob storage/filesystem)
+	DF APIs are available in Java, Scala, Python and R
+	DF is an alias of DataSet[row]
+	
+	
+Creating a DF:
+
+spark = SparkSession.appName("first df").getOrCreate()
+sc = spark.sparkContext
+
+data = [("Java", "200000"), ("Python", "100000"), ("Scala", "30000")]
+columns = ["language", "users_count"]
+
+rdd = sc.parallelize(data)
+
+dfFromRDD = rdd.toDF()
+dfFromRDD.printSchema()
+
+dfFromRDD2 = rdd.toDF(columns)
+dfFromRDD2.printSchema()
+
+Customers: 25 columns
+Id, Firstname, Lastname, City
+SELECT Id, Firstname, Lastname, City
+FROM Customers
+
+
+Create View CustomerView
+AS
+	SELECT Id, Firstname, Lastname, City
+	FROM Customers
+
+
+SELECT * FROM CustomerView
+
+Customers
+Orders
+Order_Details
+Products
+
+Create View OrderInformation
+AS
+	SELECT customerinfo, orderinfo, order_details_info, product_info
+	FROM Customers
+	INNER JOIN Orders ON ....
+	INNER JOIN Order_Detailss ON ....
+	INNER JOIN Products ON ....
+
+SELECT * FROM OrderInformationView
+WHERE Customercity = 'Indore'
+GROUP BY
+ORDER BY
+
+spark = SparkSession.builder.appName("...").getOrCreate()
+
+df = spark.read.text("people.txt")
+df = spark.read.json("people.json")
+df = spark.read.csv("people.csv")
+
+Avro, Parquet, Streaming data from Kafka (next week)
+ORC - Hive files
+
+Different ways to create empty RDDs:
+emptyRDD = sc.parallelize([])
+emptyRDD = spark.sparkContext.parallelize([])
+emptyRDD = spark.sparkContext.emptyRDD()
+
+schema = StructType([
+	StructField("firstname", StringType(), True),
+	StructField("middlename", StringType(), True),
+	StructField("lastname", StringType(), True),
+])
+
+# Create an empty DF from an empty RDD.
+# Approach #1
+df1 = spark.createDataFrame(emptyRDD)
+df1 = spark.createDataFrame(emptyRDD, schema)
+df1.printSchema()
+
+# Approach #2
+df2 = emptyRDD.toDF()
+df2 = emptyRDD.toDF(schema)
+
+# Approach #3
+df3 = spark.createDataFrame([], schema)
+
+# Approach #4
+df4 = spark.createDataFrame([], StructType([]))
+
+# Show contents
+df.show()
+df.show(truncate=True)	# Default.
+df.show(truncate=False)	
+deptDF1.show(truncate=10)
+deptDF1.show(truncate=False, n=2)
+deptDF1.show(vertical=False)	# Default.
+deptDF1.show(vertical=True)
+
+
+Global Temporary View:
+Temporary views in Spark SQL are session-scoped and will disappear if the session that creates it terminates. If you want to have a temporary view that is shared among all sessions and keep alive until the Spark application terminates, you can create a global temporary view. Global temporary view is tied to a system preserved database global_temp, and we must use the qualified name to refer it, e.g. SELECT * FROM global_temp.view1.
+
+df.createGlobalTempView("people")
+# Global temporary view is tied to a system preserved database `global_temp`
+spark.sql("SELECT * FROM global_temp.people").show()
+
+# Global temporary view is cross-session
+spark.newSession().sql("SELECT * FROM global_temp.people").show()
+
+
+# StructType_StructField variations.
+import pyspark
+from pyspark.sql import SparkSession
+from pyspark.sql.types import StructType,StructField, StringType, IntegerType,ArrayType,MapType
+from pyspark.sql.functions import col,struct,when
+
+spark = SparkSession.builder.master("local[1]") \
+                    .appName('SparkByExamples.com') \
+                    .getOrCreate()
+
+data = [("James","","Smith","36636","M",3000),
+    ("Michael","Rose","","40288","M",4000),
+    ("Robert","","Williams","42114","M",4000),
+    ("Maria","Anne","Jones","39192","F",4000),
+    ("Jen","Mary","Brown","","F",-1)
+  ]
+
+schema = StructType([ 
+    StructField("firstname",StringType(),True), 
+    StructField("middlename",StringType(),True), 
+    StructField("lastname",StringType(),True), 
+    StructField("id", StringType(), True), 
+    StructField("gender", StringType(), True), 
+    StructField("salary", IntegerType(), True) 
+  ])
+ 
+df = spark.createDataFrame(data=data,schema=schema)
+print("Regular schema...")
+df.printSchema()
+df.show(truncate=False)
+
+# Complex object.
+structureData = [
+    (("James","","Smith"),"36636","M",3100),
+    (("Michael","Rose",""),"40288","M",4300),
+    (("Robert","","Williams"),"42114","M",1400),
+    (("Maria","Anne","Jones"),"39192","F",5500),
+    (("Jen","Mary","Brown"),"","F",-1)
+  ]
+structureSchema = StructType([
+        StructField('name', StructType([
+             StructField('firstname', StringType(), True),
+             StructField('middlename', StringType(), True),
+             StructField('lastname', StringType(), True)
+             ])),
+         StructField('id', StringType(), True),
+         StructField('gender', StringType(), True),
+         StructField('salary', IntegerType(), True)
+         ])
+
+df2 = spark.createDataFrame(data=structureData,schema=structureSchema)
+print("Complex schema...")
+df2.printSchema()
+df2.show(truncate=False)
+
+
+updatedDF = df2.withColumn("OtherInfo", 
+    struct(col("id").alias("identifier"),
+    col("gender").alias("gender"),
+    col("salary").alias("salary"),
+    when(col("salary").cast(IntegerType()) < 2000,"Low")
+      .when(col("salary").cast(IntegerType()) < 4000,"Medium")
+      .otherwise("High").alias("Salary_Grade")
+  )).drop("id","gender","salary")
+
+updatedDF.printSchema()
+updatedDF.show(truncate=False)
+
+
+# Row class for creating DFs.
+pyspark.sql.Row
+
+Before Spark 3.0, a Row class sobject (with named arguments), the fields sorted by name.
+Starting with 3.0, a Row class with named arguments, fields are no longer sorted by name. Ordered in the position entered.
+To enable sorting by names, set the evn var PYSPARK_ROW_FIELD_SORTING_ENABLED to True
+
+# StructType_StructField.py
+import pyspark
+from pyspark.sql import SparkSession, Row
+from pyspark.sql.types import StructType,StructField, StringType, IntegerType,ArrayType,MapType
+from pyspark.sql.functions import col,struct,when
+
+spark = SparkSession.builder.master("local[1]") \
+                    .appName('SparkByExamples.com') \
+                    .getOrCreate()
+
+data = [("James","","Smith","36636","M",3000),
+    ("Michael","Rose","","40288","M",4000),
+    ("Robert","","Williams","42114","M",4000),
+    ("Maria","Anne","Jones","39192","F",4000),
+    ("Jen","Mary","Brown","","F",-1)
+  ]
+
+schema = StructType([ 
+    StructField("firstname",StringType(),True), 
+    StructField("middlename",StringType(),True), 
+    StructField("lastname",StringType(),True), 
+    StructField("id", StringType(), True), 
+    StructField("gender", StringType(), True), 
+    StructField("salary", IntegerType(), True) 
+  ])
+ 
+df = spark.createDataFrame(data=data,schema=schema)
+print("Regular schema...")
+df.printSchema()
+df.show(truncate=False)
+
+# Complex object.
+structureData = [
+    (("James","","Smith"),"36636","M",3100),
+    (("Michael","Rose",""),"40288","M",4300),
+    (("Robert","","Williams"),"42114","M",1400),
+    (("Maria","Anne","Jones"),"39192","F",5500),
+    (("Jen","Mary","Brown"),"","F",-1)
+  ]
+structureSchema = StructType([
+        StructField('name', StructType([
+             StructField('firstname', StringType(), True),
+             StructField('middlename', StringType(), True),
+             StructField('lastname', StringType(), True)
+             ])),
+         StructField('id', StringType(), True),
+         StructField('gender', StringType(), True),
+         StructField('salary', IntegerType(), True)
+         ])
+
+df2 = spark.createDataFrame(data=structureData,schema=structureSchema)
+print("Complex schema...")
+df2.printSchema()
+df2.show(truncate=False)
+
+# # Custom / computed columns. Create columns from existing columns using "withColumn()".
+# updatedDF = df2.withColumn("OtherInfo", 
+#     struct(col("id").alias("identifier"),
+#     col("gender").alias("gender"),
+#     col("salary").alias("salary"),
+#     when(col("salary").cast(IntegerType()) < 2000,"Low")
+#       .when(col("salary").cast(IntegerType()) < 4000,"Medium")
+#       .otherwise("High").alias("Salary_Grade")
+#   )).drop("id","gender","salary")
+
+# updatedDF.printSchema()
+# updatedDF.show(truncate=False)
+
+
+# # """ Array & Map"""
+# # arrayStructureSchema = StructType([
+# #     StructField('name', StructType([
+# #        StructField('firstname', StringType(), True),
+# #        StructField('middlename', StringType(), True),
+# #        StructField('lastname', StringType(), True)
+# #        ])),
+# #        StructField('hobbies', ArrayType(StringType()), True),
+# #        StructField('properties', MapType(StringType(),StringType()), True)
+# #     ])
+
+# # ArrayType example:
+# dataArr = [
+#  ("James,,Smith",["Java","Scala","C++"],["Spark","Java"],"OH","CA"),
+#  ("Michael,Rose,",["Spark","Java","C++"],["Spark","Java"],"NY","NJ"),
+#  ("Robert,,Williams",["CSharp","VB"],["Spark","Python"],"UT","NV")
+# ]
+
+# schemaArr = StructType([ 
+#     StructField("name",StringType(),True), 
+#     StructField("languagesAtSchool",ArrayType(StringType()),True), 
+#     StructField("languagesAtWork",ArrayType(StringType()),True), 
+#     StructField("currentState", StringType(), True), 
+#     StructField("previousState", StringType(), True)
+#   ])
+
+# dfArr = spark.createDataFrame(data=dataArr,schema=schemaArr)
+# print("ArrayType example...")
+# dfArr.printSchema()
+# dfArr.show()
+
+# # MapType example:
+# schemaMap = StructType([
+#     StructField('name', StringType(), True),
+#     StructField('properties', MapType(StringType(),StringType()),True)
+# ])
+
+# dataDictionary = [
+#         ('James',{'hair':'black','eye':'brown'}),
+#         ('Michael',{'hair':'brown','eye':None}),
+#         ('Robert',{'hair':'red','eye':'black'}),
+#         ('Washington',{'hair':'grey','eye':'grey'}),
+#         ('Jefferson',{'hair':'brown','eye':''})
+#         ]
+# dfMap = spark.createDataFrame(data=dataDictionary, schema = schemaMap)
+# print("MapType example...")
+# dfMap.printSchema()
+# dfMap.show(truncate=False)
+
+# # Creating StructType object struct from JSON file.
+# # Print the schema in JSON format.
+# print("Schema in json format...")
+# print(df2.schema.json())
+
+# # This will return an relatively simpler schema format.
+# print("Schema in simple string format...")
+# print(df2.schema.simpleString())
+
+# # Use the JSON to create a DF.
+# print("Create DF using a JSON Schema....")
+# import json
+# schema_dict = {"fields":[{"metadata":{},"name":"name","nullable":True,"type":{"fields":[{"metadata":{},"name":"firstname","nullable":True,"type":"string"},{"metadata":{},"name":"middlename","nullable":True,"type":"string"},{"metadata":{},"name":"lastname","nullable":True,"type":"string"}],"type":"struct"}},{"metadata":{},"name":"id","nullable":True,"type":"string"},{"metadata":{},"name":"gender","nullable":True,"type":"string"},{"metadata":{},"name":"salary","nullable":True,"type":"integer"}],"type":"struct"}
+
+# #schemaFromJson = StructType.fromJson(json.loads("resources/spark_examples/schema.json"))
+# schemaFromJson = StructType.fromJson(schema_dict)
+# df3 = spark.createDataFrame(
+#         spark.sparkContext.parallelize(structureData),schemaFromJson)
+# df3.printSchema()
+# df3.show()
+
+# Create DF using Row.
+print("Create DF using Row...")
+print("Access values using index...")
+row = Row("James", 40)
+print(row[0], row[1])
+
+print("Access values using field names (named arguments)...")
+row2 = Row(name = "Mary", age = 2)
+print(row2.name, row2.age)
+
+print("Define a custom class from Row...")
+Person = Row("name", "age")
+p1 = Person("John", 25)
+p2 = Person("Mary", 21)
+print(p1.name, p1.age)
+print(p2.name, p2.age)
+
+# Use Row class on RDD.
+dataRow = [Row(name="James,,Smith",lang=["Java","Scala","C++"], state="OH"),
+  Row(name="Michael,Rose,",lang=["Spark","Java","C++"],state="NY"),
+  Row(name="Robert,,Williams",lang=["CSharp","VB"],state="UT")
+]
+
+rddRows = spark.sparkContext.parallelize(dataRow)
+print("Printing rdd created using Rows...")
+print(rddRows.collect())
+
+rddRowsCollected = rddRows.collect()
+print("Printing rdd created using Rows using a 'for' loop...")
+for row in rddRowsCollected:
+  print(row.name, row.lang, row.state)
+
+# Create DF using custom Row class.
+Person = Row("name", "lang", "state")
+dataRow = [Person("James,,Smith",["Java","Scala","C++"], "OH"),
+  Person("Michael,Rose,",["Spark","Java","C++"],"NY"),
+  Person("Robert,,Williams",["CSharp","VB"],"UT")
+]
+
+dfRows = spark.createDataFrame(dataRow)
+print("DF created using custom Row class...")
+df.printSchema()
+df.show()
+
+columns = ["name", "languagesUsed", "currentState"]
+dfRowsWithColumnList = spark.createDataFrame(dataRow).toDF(*columns)
+print("Change column name(s) using .toDF()...")
+dfRowsWithColumnList.printSchema()
+dfRowsWithColumnList.show()
+
+# Nested Rows.
+dataNestedRows = [Row(name="John", properties=Row(hair="brown", eye="black")),
+  Row(name="Mary", properties=Row(hair="blonde", eye="green")),
+  Row(name="Joe", properties=Row(hair="black", eye="blue"))
+]
+dfNestedRows = spark.createDataFrame(dataNestedRows)
+print("DF with nested rows...")
+dfNestedRows.printSchema()
+dfNestedRows.show()
+
+
+# Column class.
+pyspark.sql.Column
+several functions to work on DFs to manipulate column values, evaluation expressions (boolean), filter rows, retrieve part of a value from a DF column, list, map, struct cols.
+
+lit() => short literal
+
+stratsWith()
+endsWith()
+isNull()
+isNotNull()
+substr()
+isIn()	= check if a value exists in a list
+getField()
+	name="John", prop=(hair="black",eye="brown")
+	df.prop.getField("hair")
+getItem()
+	getItem(2)
+	
+df.select("fname")
+df.select("fname", "lname")
+df.select(df.fname, df.lname)
+df.select(df["fname"], df["lname"])
+df.select(col("fname"), col("lname"))
+df.select(df.colRegex("`^.*name*`"]).show()
+df.select("*").show()
+df.select([col for col in df.columns()]).show()
+df.select(df.columns[:3]).show()
+df.select(df.columns[2:4]).show(3)
+
+
+pyspark_column_class.py
+import pyspark
+from pyspark.sql import SparkSession, Row
+from pyspark.sql.types import StructType,StructField, StringType, IntegerType,ArrayType,MapType
+from pyspark.sql.functions import col,struct,when, lit
+
+spark = SparkSession.builder.master("local[1]") \
+                    .appName('ajaysingala.com') \
+                    .getOrCreate()
+
+# simplests way to create a column.
+colObj = lit("ajaysingala.com")
+
+data = [("John", 23), ("Mary", 21)]
+df = spark.createDataFrame(data).toDF("name.firstname", "age")
+df.printSchema()
+df.show()
+
+df.select(df.age).show()
+df.select(df["age"]).show()
+# Access column names with dot and backticks (`).
+df.select(df["`name.firstname`"]).show()
+
+# Using SQL col().
+print("print using col()...")
+df.select(col("gender")).show()
+# Access column names with dot and backticks (`).
+df.select(col("`name.firstname`")).show()
+
+# Access struct type columns.
+data2 = [Row(name="John", prop=Row(hair="black", eye="blue")),
+    Row(name="Mary", prop=Row(hair="blonde", eye="green")),
+    Row(name="John", prop=Row(hair="brown", eye="black"))
+]
+df2 = spark.createDataFrame(data2)
+print("Schema...")
+df2.printSchema()
+df2.show()
+
+print("Access struct cols...")
+df2.select(df.prop.hair).show()
+df2.select(df["prop.hair"]).show()
+df2.select(col("prop.hair")).show()
+
+print("Access all strut cols...")
+df2.select(col("prop.*")).show()
+
+# Column Operators.
+data3 = [(100,2,1), (200,3,4), (300,4,4)]
+df = spark.createDataFrame(data3).toDF("col1", "col2", "col3")
+
+# Arithmetic operations.
+print("column arithmetic operations...")
+df.select(df.col1 + df.col2).show()
+df.select(df.col1 - df.col2).show()
+df.select(df.col1 * df.col2).show()
+df.select(df.col1 / df.col2).show()
+df.select(df.col1 % df.col2).show()
+
+df.select(df.col2 > df.col3).show()
+df.select(df.col2 < df.col3).show()
+df.select(df.col2 == df.col3).show()
+
+# Column functions.
+data4 = [("James","Bond","100",None),
+      ("Ann","Varsa","200",'F'),
+      ("Tom Cruise","XXX","400",''),
+      ("Tom Brand",None,"400",'M')] 
+columns4 = ["fname","lname","id","gender"]
+df4=spark.createDataFrame(data4,columns4)
+
+# alias().
+from pyspark.sql.functions import expr
+print("alias()...")
+df4.select(df4.fname.alias("first_name"), \
+          df4.lname.alias("last_name")
+   ).show()
+
+#Another example
+df4.select(expr(" lname ||', '|| fname").alias("fullName") \
+   ).show()
+
+# sort(), .asc() and .desc().
+print("asc() and desc()...")
+df4.sort(df4.fname.asc()).show()
+df4.sort(df4.fname.desc()).show()
+
+# between().
+print("between()...")
+df4.filter(df4.id.between(100,300)).show()
+
+# contains().
+print("contains()...")
+df4.filter(df4.fname.contains("Cruise")).show()
+
+# like().
+print("like()...")
+df4.select(df4.fname,df.lname,df.id) \
+  .filter(df4.fname.like("%om")) 
+
+# when & otherwise
+from pyspark.sql.functions import when
+df4.select(df4.fname,df.lname,when(df4.gender=="M","Male") \
+	.when(df4.gender=="F","Female") \
+	.when(col("gender").isNull() ,"undefined") \
+	.otherwise(df4.gender).alias("new_gender") \
+).show()
+
+# pyspark_withColumn.py
+import pyspark
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, lit
+from pyspark.sql.types import StructType, StructField, StringType,IntegerType
+
+spark = SparkSession.builder.appName('ajaysingala.com').getOrCreate()
+
+data = [('James','','Smith','1991-04-01','M',3000),
+  ('Michael','Rose','','2000-05-19','M',4000),
+  ('Robert','','Williams','1978-09-05','M',4000),
+  ('Maria','Anne','Jones','1967-12-01','F',4000),
+  ('Jen','Mary','Brown','1980-02-17','F',-1)
+]
+
+columns = ["firstname","middlename","lastname","dob","gender","salary"]
+df = spark.createDataFrame(data=data, schema = columns)
+print("The original schema...")
+df.printSchema()
+df.show(truncate=False)
+
+df2 = df.withColumn("salary",col("salary").cast("Integer"))
+print("df2 with salary as integer...")
+df2.printSchema()
+df2.show(truncate=False)
+
+df3 = df.withColumn("salary",col("salary")*100)
+print("salary * 100...")
+df3.printSchema()
+df3.show(truncate=False) 
+
+df4 = df.withColumn("CopiedColumn",col("salary")* -1)
+print("Copy the column 'salary'...")
+df4.printSchema()
+df4.show()
+
+df5 = df.withColumn("Country", lit("USA"))
+print("Literal value to column 'Country'...")
+df5.printSchema()
+df5.show()
+
+df6 = df.withColumn("Country", lit("USA")) \
+   .withColumn("anotherColumn",lit("anotherValue"))
+print("Literal value to column 'Country' and create another column with a literal value...")
+df6.printSchema()
+df6.show()
+
+df.withColumnRenamed("gender","sex") \
+  .show(truncate=False) 
+print("Rename column 'gender' to 'sex' in the original DF...")
+df.printSchema()
+df.show()
+
+df4.drop("CopiedColumn") \
+.show(truncate=False) 
+print("Drop the column 'CopiedColumn from df4...")
+df4.printSchema()
+df4.show()
+
+# collect()
+	action => used to retrieve all elements from a given dataset.
+	retrieve all the elements from ALL the nodes to the driver (main) node.
+	always apply collect() on either a filter(), group() etc. (filtered data).
+	
+	vs select() => select() is a transformation function.
+		specify columns - select("fname, lastname")
+
+# withColumn and withColumnRenamed => transformations.
+	withColumnRenamed(existingName, newName)
+		dfNew = df.withColumnRenamed("dob", "DateOfBirth")
+		dfNew.printSchema()
+	
+		df.withColumnRenamed("dob", "DateOfBirth").withColumnRenamed("sex", "Gender")
+		
+		Created a DF with StringType & StructField.
+		df.select(col("gender").alias("sex"),
+			col("name.fname").alias("firstname")
+
+	using toDF() to rename columns.
+		currentColumns = ["fname", "lname", "sex", "dob"]
+		df = spark.createDataFrame(data, currentColumns)
+		df.printSchema()
+		
+		newColumns = ["firstname", "lastname", "gender", "dateOfBirth"]
+		dfNew = df.toDF(*newColumns)
+		dfNew.printSchema()
+		
+# filter()
+	df.filter("gender != 'M'").show() 
+	df.filter("gender <> 'M'").show() 
+	
+	states = ["OH", "NY"]
+	df.filter(df.state.isin(states)).show()
+	
+	# NOT IS IN.
+	df.filter(df.state.isin(states) == False).show()
+	df.filter(~df.state.isin(states)).show()
+
+	df.filter(df.name.firstname.contains("Tom")).show()
+	df.filter(df.name.firstname.like("Tom%")).show()
+	
+	
+inner join
+outer join (full outer join)
+left (outer) join
+right (outer) join
+leftsemi: display columns from left table for matching records only and ignore columns from right table.
+leftanti: display columns from left table for non-matching records only and ignore columns from right table.
+self-join
+
+map():
+	only with RDD.
+	DF do not have map().
+		extract the RDD from the DF and then map() on the RDD.
+		df.rdd.map()
+
+map() vs flatMap():
+	map :It returns a new RDD by applying a function to each element of the RDD.   Function in map can return only one item.
+
+	flatMap: Similar to map, it returns a new RDD by applying  a function to each element of the RDD, but output is flattened.
+	Also, function in flatMap can return a list of elements (0 or more)
+
+	E.g.1:
+	sc.parallelize([3,4,5]).map(lambda x: range(1,x)).collect()
+	Output:
+	[[1, 2], [1, 2, 3], [1, 2, 3, 4]]
+
+	sc.parallelize([3,4,5]).flatMap(lambda x: range(1,x)).collect()
+	Output:  notice o/p is flattened out in a single list
+	[1, 2, 1, 2, 3, 1, 2, 3, 4] 
+
+	E.g.2:
+	Good Morning
+	Good Evening
+	Good Day
+	Happy Birthday
+	Happy New Year
+
+	lines = sc.textFile("greetings.txt")
+	lines.map(lambda line: line.split()).collect()
+	Output:-
+	[['Good', 'Morning'], ['Good', 'Evening'], ['Good', 'Day'], ['Happy', 'Birthday'], ['Happy', 'New', 'Year']]
+
+	lines.flatMap(lambda line: line.split()).collect()
+	Output:-
+	['Good', 'Morning', 'Good', 'Evening', 'Good', 'Day', 'Happy', 'Birthday', 'Happy', 'New', 'Year']
+
+parquet file format:
+	PySpark SQL ()s to read/write DFs into Partquet files.
+	parquet()
+	DataFrameReader / DataFrameWriter
+	Maintains the schema along with the data in the parquet file.
+	To process structured file.
+	
+	df.write.parquet("tmp/output/employees/emp.parquet")
+	empDF = spark.read.parquet(tmp/output/employees/emp.parquet")
+	
+	Is a columnar storage format.
+	It is available to any framework on Hadoop.
+	
+	Advantages:
+		since it is in columnar format, it skips irrelevant data very quickly, query execution is very fast. aggregations are faster.
+		supports nested data structures.
+		has efficient compression and encoding capabilities.
+		Automatically captures the schema of the data (DF).
+		reduces storage by almost 75% on average.
+		Pyspark supports parquet OOTB, no specific dependency on libraries.
+
+5 levels of logging:
+	debug		0
+	info		1
+	warning		2
+	error		3
+	critical	4
+
+#pyspark.parquet.py
+import pyspark
+from pyspark.sql import SparkSession
+
+spark=SparkSession.builder.appName("parquetFile").getOrCreate()
+spark.sparkContext.setLogLevel("ERROR")                 # Default is INFO.
+data =[("James ","","Smith","36636","M",3000),
+        ("Michael ","Rose","","40288","M",4000),
+        ("Robert ","","Williams","42114","M",4000),
+        ("Maria ","Anne","Jones","39192","F",4000),
+        ("Jen","Mary","Brown","","F",-1)]
+columns=["firstname","middlename","lastname","dob","gender","salary"]
+
+print("Creating Data Frame...")
+df=spark.createDataFrame(data,columns)
+df.show()
+
+# Write to a Parquet file to HDFS.
+df.write.parquet("/tmp/output/people.parquet")
+
+# Write to local folder.
+print("Writing...")
+df.write.parquet("file:///home/hdoop/tmp/output/people.parquet")
+
+# Read from a Parquet file.
+print("Reading...")
+parDF=spark.read.parquet("/tmp/output/people.parquet")
+parDF.show()
+
+# Append or overwrite a Parquet file.
+print("Appending...")
+df.write.mode('append').parquet("/tmp/output/people.parquet")
+print("Overwriting...")
+df.write.mode('overwrite').parquet("/tmp/output/people.parquet")
+
+# Create temporary views on parquet files for executing sql queries.
+print("Creating temporary view...")
+parDF.createOrReplaceTempView("ParquetTable")
+parkSQL = spark.sql("select * from ParquetTable where salary >= 4000 ")
+parkSQL.show()
+
+# Creating a table on Parquet file.
+print("Create and show table on Parquet file...")
+spark.sql("CREATE TEMPORARY VIEW PERSON USING parquet OPTIONS (path \"/tmp/output/people.parquet\")")
+spark.sql("SELECT * FROM PERSON").show()
+
+# Create Parquet partition file.
+print("Creating Parquet partition file...")
+df.write.partitionBy("gender","salary").mode("overwrite").parquet("/tmp/output/people2.parquet")
+
+# Retrieving from a partitioned Parquet file
+print("Retrieving from a partitioned Parquet file...")
+parDF2=spark.read.parquet("/tmp/output/people2.parquet/gender=M")
+parDF2.show(truncate=False)
+
+# Creating a table on Partitioned Parquet file.
+print("Creating a table on Partitioned Parquet file...")
+spark.sql("CREATE TEMPORARY VIEW PERSON2 USING parquet OPTIONS (path \"/tmp/output/people2.parquet/gender=F\")")
+spark.sql("SELECT * FROM PERSON2" ).show()
+
+# SparkSession:	entry point.
+spark = SparkSession.builder \
+    .master("spark://mycluster.acme.org[4]") \
+    .appName("ajaysingala.com") \
+    .getOrCreate()
+	
+	Explain:
+		.master():
+			.master("local")
+			.master("local[n]")
+			.master("local[*]")
+			.master("spark://url:port")	# standalone spart cluster.
+			.mesos("mesos://url:port")
+			.master("yarn")
+				determine the location of the cluster from the HADOOP_CONF_DIR / YARN_CONF_DIR
+			.master("yarn-client")		# --deploy-mode client
+			.master("yarn-cluster")		# --deploy-mode cluster
+			
+		.config():
+			.config("key", "value")
+			.config("spark.executor.memory", "512m")

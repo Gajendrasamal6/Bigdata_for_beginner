@@ -1,0 +1,256 @@
+Apache Spark:
+#1 Big Data Tool
+It's "Hadoop Killer"
+Spark can process data from HDFS, AWS S3, Databases, Messaging Systems (queues, Kafka etc.)
+100TB data.
+	3 times faster than MR.
+Uses in-memory cluster computing.
+MapReduce
+Streaming
+Features:
+	Speed: 10 times faster than running on a disk (in-memory). Reduces the number of read/write operations to disk.
+	Supports multiple languages: base is Java. Built-in APIs are in Java, Scala, Python (PySpark).
+	Advanced Analytics: supports much more than MapReduce. SQL queries, Streaming of data, ML, Graph Algorithms.
+Spark Components:
+	Apache Spark Core: underlying execution engine of Spark platform. all other components are built on top of Core. Provides in-memory computing capabilities, ability to reference external data (dbs, AWS S3, Streaming services).
+	SparkSQL: sits on top of Core. Abstraction (aka SchemaRDD) over the data, supports structured and un-structured data. Provides a SQL language, Dataframes and DataSets.
+	Spark Streaming: Leverages the Core / functionalities to schedule and process streaming analytics. Read/Write data in batches, in queues. Perform transformations of the data into RDDs (Resilient Distributed DataSets) and do further processing.
+	Spark ML: Distributed ML framework. Devs use MLlib and implement various ML algos. (Hadoop also has an MLlib "Mahout")
+	Spark GraphX: distributed Graph-processing framework. Graph computation. (more towards AI, analytics etc.)
+
+Spark itself is written in Scala.
+
+RDDs:
+	Resilient Distributed DataSets.
+	Fundamental data structure of Spark.
+	Immutable distributed collection of objects.
+	any data read (from a file, stream, db) => DataSet
+	DataSet in an RDD -> divided into logical partitions, are processed / computed on different nodes  on the cluster.
+	RDDs can contain objects of types in Python, Java, Scala (including user-defined classes).
+	RDDs are Readonly.
+	A Readonly, Partitioned collection of records.
+	A Fault-tolerant collection of elements/records that can be operated/computed in parallel.
+	
+	Two ways in which you can create RDDs:
+		1. Parallelize existing collection of data, apply transformations (map, filter, reducer, joins...) on existing RDDs.
+		2. Reference a dataset in an external storage system (shared file system, HDFS, Hive, HBase, any data source offer Hadoop Inpotu Format).
+		
+Data Sharing in Map Reduce:
+	Slow.
+	Iterative and Interactive applications.
+		require faster data sharing across all paralle jobs.
+		Since MR does replication, serialization, disk IO, MR is slow!!!
+		Hadoop, most of the tools/frameworks spend ~90% of time doing HDFS read/write operations.
+		
+Shared Variables:
+	Variables that are shared over/between different nodes
+	Broadcast variables: used to cache values in memory of nodes (for e.g.; commonly used values).
+	Accumulators: used to add values (counters, sums, average).
+
+Core Programming:
+	Spark Shell:
+		1. Scala
+		2. Python (PySpark Shell)
+	Python/Scala/Java programs
+	Start a shell:
+		spark-shell
+
+SparkContext => Entry point Spark
+SQLContext => Entry point to SparkSQL
+HiveContext => Entry point to Hive
+
+SparkSession
+	SparkContext
+	SQLContext
+	HiveContext
+
+sparkSession = <create>
+sc = sparkSession.sparkContext
+
+current user: maria_dev
+HDFS home dir: /user/maria_dev
+
+hdfs dfs -ls .
+hdfs dfs -mkdir tmp		=> /user/maria_dev/tmp
+hdfs dfs -mkdir /tmp	=> /tmp
+hdfs dfs -mkdir /etc/dumps/abcd		=> /etc/dumps/abcd
+hdfs dfs -mkdir etc/dumps/abcd		=> /user/maria_dev/etc/dumps/abcd
+
+
+For HDFS:
+val inputfile = sc.textFile("input.txt")
+For local file:		
+val inputfile = sc.textFile("file:///home/maria_dev/SparkSamples/input.txt")
+
+
+val counts = inputfile.flatMap(line => line.split(" ")).map(word => (word, 1)).reduceByKey(_+_);
+counts.toDebugString
+counts.cache()
+counts.saveAsTextFile("tmp/outputdir")							=> HDFS /user/maria_dev/tmp/outputdir
+counts.saveAsTextFile("file:///home/maria_dev/tmp/outputdir")	=> Local file system.
+counts.unpersist()
+
+Numeric RDD ops:
+count()
+Mean()
+sum(0
+Max()
+Min()
+Variance()
+Stdev()
+
+RDD Transformations:
+	Spark Transformation is a function that will generate a new RDD from an existing RDD.
+	RDD Operator Graph / RDD Dependency Graph -> Logical Execution Plan.
+	Directed Acyclic Graph (DAG) of the all RDDs (all parent RDDs of an RDD)
+	Lazy in nature:, i.e.; they get executed only when you call an "action".
+		not executed immediately.
+	very common actions:
+		map()
+		reduceByKey()
+		filter()
+	Resulting RDD is usually different from the original RDD.
+		smaller transformations: filter, count, distinct
+		bigger transformations: flatMap(), union()
+		same: map()
+		
+	Narrow Transformations:
+		all the elements that are required to process / compute the data, they all exist on a single partition (together) of the parent RDD.
+		e.g.; map() filter()
+	Wide Transformations:
+		all the elements that are required to proicess / compute the data, may live on many partitions of the parent RDD.
+
+map(func):
+	rdd = {1,2,3,4,5}
+	rdd.map(x => x + 2)
+	result will be (3,4,5,6,7)
+flatMap(func):
+	val data = spark.read.textFile("input.txt").rdd
+	val flatMapfile = data.flatMap(line => line.split(" "))
+	flatMapfile.foreach(println)
+filter(func):
+	val data = spark.read.textFile("input.txt").rdd
+	val flatMapfile = data.flatMap(line => line.split(" ")).filter(value => value == "beautiful")
+	flatMapfile.foreach(println)
+	println(flatMapfile.count())
+union():
+	val rdd1 = sc.parallelize(Seq((1, "Jan", 2016), (3, "Nov", 2014), (16, "Feb", 2014)))
+	val rdd2 = sc.parallelize(Seq((5, "Dec", 2014), (17, "Sep", 2015)))
+	val rdd3 = sc.parallelize(Seq((5, "Mar", 2011), (7, "Apr", 2010), (30, "Jun", 2012)))
+	val rddUnion = rdd1.union(rdd2).union(rdd3)
+	rddUnion.foreach(println)
+intersection():
+	val rdd1 = sc.parallelize(Seq((1, "Jan", 2016), (3, "Nov", 2014), (16, "Feb", 2014)))
+	val rdd2 = sc.parallelize(Seq((5, "Dec", 2014), (17, "Sep", 2015), (1, "Jan", 2016)))
+	val rddIntersection = rdd1.intersection(rdd2)
+	rddIntersection.foreach(println)
+distinct():
+	val rdd1 = sc.parallelize(Seq("Spark", "Kafka", "Spark", "Hadoop", "HDFS", "Hive", "Spark"))
+	val result = rdd1.distinct()
+	println(result.collect().mkString(", "))
+groupByKey():
+	groupby on a dataset of (K,V) pairs.
+	
+	val data = sc.parallelize(Array(('k',5), ('s',3), ('s',4), ('p',7), ('p',5), ('t',8), ('k',6)))
+	val group = data.groupByKey().collect()
+	group.foreach(println)
+reduceByKey():
+	reducer that works on a dataset with (K,V) pairs.
+	Elements with the same key are combined before the data is shuffled.
+	
+	val words = Array("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "six", "four", "two")
+	val data = sc.parallelize(words).map(w => (w,1)).reduceByKey(_+_)
+	data.foreach(println)
+sortByKey():
+	val data = sc.parallelize(Seq(("maths", 52), ("english", 75), ("science", 82), ("maths", 80)))
+	val sorted = data.sortByKey()
+	sorted.foreach(println)
+join():
+	val rdd1 = sc.parallelize(Array(('A',5), ('B',3), ('C',4), ('D',7), ('A',1)))
+	val rdd2 = sc.parallelize(Array(('A',9), ('B',10), ('D',11), ('p',7), ('p',5), ('t',8), ('k',6), ('A', 99)))
+	val result = rdd1.join(rdd2)
+	println(result.collect().mkString(", "))
+
+RDD Actions:
+	Transformations will give a new RDD.
+	Action will work on the same RDD. Will not give a new RDD.
+	
+	count()
+	collect()
+	take(n) => return "n" elements
+	top(n) => return the top "n" elements
+	countByValue()
+	
+	val data = spark.read.textFile("file:///home/maria_dev/SparkSamples/input.txt").rdd
+	val result = data.map(line => (line, line.length)).countByValue()
+	result.foreach(println)
+	
+	val data = sc.parallelize(Seq(1,2,2,3,4,5,5,6,6,6))
+	val result = data.countByValue()
+	result.foreach(println)
+	
+	val data = sc.parallelize(Array(('A',5), ('B',3), ('C',4), ('D',7), ('A',1), ('A', 5), ('B', 5)))
+	val result = data.countByValue()
+	result.foreach(println)
+reduce():
+	val data = sc.parallelize(List(20,32,45,62,8,5))
+	val sum = data.reduce(_+_)
+	println(sum)
+fold():
+	val rdd1 = sc.parallelize(List(("Maths",80), ("Science", 90)))
+	val additionalMarks = ("Bonus", 5)
+	val sum1 = rdd1.fold(additionalMarks)( (sub,marks)=>{ ("Total", sub._2 + marks._2)})
+	println(sum1)
+
+	println("Min : " + rdd1.fold(additionalMarks)( (sub,marks)=>{ ("Min", sub._2 min marks._2)}))
+	println("Max : " + rdd1.fold(additionalMarks)( (sub,marks)=>{ ("Max", sub._2 max marks._2)}))
+foreach():
+
+Spark Deploy Modes:
+	Cluster Mode
+		Production environment deployment.
+		Used to run production jobs.
+		Jobs (driver) will run on one of the worker nodes of the cluster. This node will be visible on Spark Web UI as a driver.
+	Local (Client) mode (Default mode)
+		runs locally from wherever you are submitting the job/application.
+		Done using "spark-sbumit" command.
+		Mainly used by developers to test / debug programs locally first before pushing to production.
+			Interactive or debugging
+foldex.scala:
+sc = 
+spark = 
+val rdd1 = sc.parallelize(List(("Maths",80), ("Science", 90)))
+val additionalMarks = ("Bonus", 5)
+val sum1 = rdd1.fold(additionalMarks)( (sub,marks)=>{ ("Total", sub._2 + marks._2)})
+println(sum1)
+
+println("Min : " + rdd1.fold(additionalMarks)( (sub,marks)=>{ ("Min", sub._2 min marks._2)}))
+println("Max : " + rdd1.fold(additionalMarks)( (sub,marks)=>{ ("Max", sub._2 max marks._2)}))
+	
+	$ spark-submit --deploy-mode client ./foldex.scala
+	$ spark-submit --deploy-mode cluster ./foldex.py
+	
+PySpark:
+	PySpark Shell
+	from pyspark import SparkContext
+	#sc = SparkContext("local", "First App")
+	
+	words = sc.parallelize( ["scala", "java", "hadoop", "spark", "spark vs hadoop", "pyspark", "pyspark and spark"])
+	count = words.count()
+	print(count)
+	
+	coll = words.collect()
+	print(coll)
+	
+	# This will not work.
+	for word in words:
+		print(word)
+	
+	# This will also not work.
+	words.foreach(print)
+	
+	def printfn(x): print(x)
+		
+	words.foreach(printfn)
+	
+	
